@@ -1,0 +1,22 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_DATA_DIR=/app/data
+      - ANA_MODE=snapshot
+      - PIPELINE_INTERVAL_SECONDS=60
+  scheduler:
+    build: .
+    environment:
+      - APP_DATA_DIR=/app/data
+      - ANA_MODE=snapshot
+      - PIPELINE_INTERVAL_SECONDS=60
+    command: ["python", "-m", "app.jobs.scheduler"]
+  tests:
+    build: .
+    environment:
+      - APP_DATA_DIR=/app/data
+      - ANA_MODE=snapshot
+    command: ["pytest", "-q"]
