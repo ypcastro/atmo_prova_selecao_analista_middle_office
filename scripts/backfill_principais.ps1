@@ -1,3 +1,52 @@
+<#
+.SYNOPSIS
+Executa backfill historico para um conjunto de reservatorios principais.
+
+.DESCRIPTION
+Percorre janelas de datas por reservatorio e chama o extract_job em modo live.
+Opcionalmente sincroniza o catalogo antes do backfill e gera CSV consolidado com
+status de cada janela processada.
+
+.PARAMETER StartDate
+Data inicial do backfill.
+
+.PARAMETER EndDate
+Data final do backfill.
+
+.PARAMETER WindowMonths
+Quantidade de meses por janela de execucao.
+
+.PARAMETER SleepSuccessSeconds
+Espera entre janelas com sucesso.
+
+.PARAMETER SleepErrorSeconds
+Espera entre janelas com erro ou sem parse valido.
+
+.PARAMETER PythonExe
+Executavel Python utilizado para chamadas do pipeline.
+
+.PARAMETER AppDataDir
+Diretorio base de dados/artifacts (equivalente a APP_DATA_DIR).
+
+.PARAMETER SyncCatalog
+Sincroniza catalogo antes de iniciar o backfill.
+
+.PARAMETER CatalogSyncRetries
+Quantidade de tentativas de sincronizacao do catalogo.
+
+.PARAMETER CatalogSyncTimeoutSeconds
+Timeout em segundos para cada tentativa de sync.
+
+.PARAMETER FailOnCatalogSyncError
+Interrompe o script se a sincronizacao do catalogo falhar.
+
+.EXAMPLE
+.\scripts\backfill_principais.ps1 -StartDate '2025-01-01' -EndDate '2025-03-31' -SyncCatalog
+
+.EXAMPLE
+.\scripts\backfill_principais.ps1 -WindowMonths 2 -SleepSuccessSeconds 2 -SleepErrorSeconds 8
+#>
+
 param(
     [datetime]$StartDate = [datetime]'2024-01-01',
     [datetime]$EndDate = [datetime]'2024-12-31',

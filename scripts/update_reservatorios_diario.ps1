@@ -1,3 +1,43 @@
+<#
+.SYNOPSIS
+Atualiza as medicoes de todos os reservatorios do catalogo para um dia alvo.
+
+.DESCRIPTION
+Sincroniza opcionalmente o catalogo, percorre todos os reservatorios da tabela
+ana_reservatorios e executa o extract_job em modo live com since=until para a data alvo.
+Gera um CSV de resumo em data/out/backfill.
+
+.PARAMETER TargetDate
+Data alvo da atualizacao. Ignorada quando -UseYesterday for informado.
+
+.PARAMETER UseYesterday
+Usa automaticamente ontem como data alvo.
+
+.PARAMETER SyncCatalog
+Sincroniza o catalogo da ANA antes da rotina diaria.
+
+.PARAMETER CatalogSyncRetries
+Quantidade de tentativas de sincronizacao do catalogo.
+
+.PARAMETER CatalogSyncTimeoutSeconds
+Timeout em segundos para cada chamada de sync do catalogo.
+
+.PARAMETER SleepSeconds
+Espera entre iteracoes de reservatorio para reduzir carga.
+
+.PARAMETER PythonExe
+Executavel Python utilizado para chamar os modulos.
+
+.PARAMETER AppDataDir
+Diretorio base de dados/artifacts (equivalente a APP_DATA_DIR).
+
+.EXAMPLE
+.\scripts\update_reservatorios_diario.ps1 -UseYesterday -SyncCatalog
+
+.EXAMPLE
+.\scripts\update_reservatorios_diario.ps1 -TargetDate '2026-03-01' -SleepSeconds 1
+#>
+
 param(
     [datetime]$TargetDate = (Get-Date),
     [switch]$UseYesterday,
