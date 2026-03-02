@@ -1,4 +1,4 @@
-# ANA_Pipeline
+﻿# ANA_Pipeline
 
 Pipeline para coletar, tratar e armazenar medicoes de reservatorios da ANA, com API e dashboard.
 
@@ -128,13 +128,9 @@ python -m streamlit run src/app/dashboard/streamlit_app.py
    - comparativo de volume util medio
 4. Se quiser, baixe os dados filtrados em CSV pelo botao `Baixar CSV filtrado`.
 
-### Print (opcional)
+### Dashboard (visao)
 
-Se quiser mostrar um print no README, use:
-
-```md
 ![Dashboard ANA](docs/img/dashboard.png)
-```
 
 ### 6) Atualizacao diaria de todos os reservatorios cadastrados
 
@@ -144,13 +140,13 @@ Se quiser mostrar um print no README, use:
 
 Para agendar no fim do dia, veja o passo a passo em [RUNBOOK.md](/C:/Users/iago.nascimento/GitHub/ANA_Pipeline/RUNBOOK.md).
 
-## Exemplo pratico: popular Três Marias no mesmo range dos outros
+## Exemplo pratico: popular Tres Marias no mesmo range dos outros
 
 ```powershell
 $env:PYTHONPATH='src'
 $env:APP_DATA_DIR='data'
 $env:ANA_MODE='live'
-$env:ANA_RESERVATORIO='19119'   # Três Marias
+$env:ANA_RESERVATORIO='19119'   # Tres Marias
 
 $start = [datetime]'2025-01-01'
 $end   = [datetime]'2026-03-01'
@@ -208,3 +204,4 @@ Status atual esperado: suite verde.
 
 1. Operacao e troubleshooting: [RUNBOOK.md](/C:/Users/iago.nascimento/GitHub/ANA_Pipeline/RUNBOOK.md)
 2. Decisoes de engenharia: [DECISIONS.md](/C:/Users/iago.nascimento/GitHub/ANA_Pipeline/DECISIONS.md)
+
