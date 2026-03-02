@@ -114,17 +114,27 @@ $env:PYTHONPATH='src'
 python -m streamlit run src/app/dashboard/streamlit_app.py
 ```
 
-### Print do dashboard
+### Como usar o dashboard
 
-Adicione a imagem em `docs/img/dashboard.png` e mantenha este bloco:
+1. Abra o dashboard e ajuste os filtros na barra lateral:
+   - `Periodo`
+   - `Subsistema`
+   - `UF`
+   - `Reservatorio`
+   - `Granularidade` (`Diario`, `Semanal`, `Mensal`)
+2. Selecione o reservatorio foco.
+3. O painel mostra automaticamente:
+   - grafico de hidrologia (volume util, afluencia/defluencia e balanco)
+   - comparativo de volume util medio
+4. Se quiser, baixe os dados filtrados em CSV pelo botao `Baixar CSV filtrado`.
+
+### Print (opcional)
+
+Se quiser mostrar um print no README, use:
 
 ```md
 ![Dashboard ANA](docs/img/dashboard.png)
 ```
-
-Visualizacao no README:
-
-![Dashboard ANA](docs/img/dashboard.png)
 
 ### 6) Atualizacao diaria de todos os reservatorios cadastrados
 
