@@ -205,3 +205,12 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ANA pipeline operational artifacts
+data/out/ana.db
+data/out/checkpoint.json
+data/out/watermark.json
+data/out/raw/
+data/out/normalized/
+data/out/backfill/
+logs/

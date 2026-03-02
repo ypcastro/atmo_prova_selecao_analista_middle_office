@@ -1,3 +1,5 @@
+"""Environment-backed runtime settings for the ANA pipeline."""
+
 from __future__ import annotations
 
 import os
@@ -8,6 +10,8 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class Settings:
+    """Runtime configuration loaded from environment variables."""
+
     data_dir: Path
     ana_mode: str
     pipeline_interval_seconds: int
@@ -17,10 +21,19 @@ class Settings:
 
     @property
     def db_path(self) -> Path:
+        """Return SQLite output path under the configured data directory."""
         return self.data_dir / "out" / "ana.db"
 
 
 def load_settings() -> Settings:
+    """Load settings from environment variables with project defaults.
+
+    Returns:
+        Settings: Immutable runtime settings object.
+
+    Raises:
+        ValueError: If date variables are not valid ISO dates.
+    """
     data_dir = Path(os.environ.get("APP_DATA_DIR", "data"))
     ana_mode = os.environ.get("ANA_MODE", "snapshot").strip().lower()
     interval = int(os.environ.get("PIPELINE_INTERVAL_SECONDS", "60"))
