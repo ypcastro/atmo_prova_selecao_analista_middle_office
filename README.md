@@ -114,9 +114,17 @@ $env:PYTHONPATH='src'
 python -m streamlit run src/app/dashboard/streamlit_app.py
 ```
 
+### Print do dashboard
+
+Adicione a imagem em `docs/img/dashboard.png` e mantenha este bloco:
+
 ```md
 ![Dashboard ANA](docs/img/dashboard.png)
 ```
+
+Visualizacao no README:
+
+![Dashboard ANA](docs/img/dashboard.png)
 
 ### 6) Atualizacao diaria de todos os reservatorios cadastrados
 
