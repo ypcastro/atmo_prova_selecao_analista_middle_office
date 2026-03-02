@@ -1,16 +1,27 @@
-﻿from __future__ import annotations
+"""Streamlit dashboard for ANA hydrology exploration and filtering."""
+
+from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import streamlit as st
+from plotly.subplots import make_subplots
 
 
 @st.cache_data(show_spinner=False)
 def load_data(db_path: Path, db_cache_key: tuple[int, int]) -> pd.DataFrame:
+    """Load measurement data from SQLite for dashboard usage.
+
+    Args:
+        db_path: Path to SQLite database.
+        db_cache_key: Cache invalidation key built from file metadata.
+
+    Returns:
+        pd.DataFrame: Raw measurement dataframe loaded from ``ana_medicoes``.
+    """
     # db_cache_key is intentionally unused; it invalidates cache when file changes.
     _ = db_cache_key
     con = sqlite3.connect(db_path)
@@ -44,6 +55,14 @@ def load_data(db_path: Path, db_cache_key: tuple[int, int]) -> pd.DataFrame:
 
 
 def preprocess(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize dataframe types and fill display defaults.
+
+    Args:
+        df: Input dataframe from SQLite.
+
+    Returns:
+        pd.DataFrame: Sanitized dataframe ready for filtering/plotting.
+    """
     output = df.copy()
     output["data_medicao"] = pd.to_datetime(output["data_medicao"], errors="coerce")
     output = output.dropna(subset=["data_medicao"])
@@ -62,6 +81,19 @@ def filter_data(
     uf: str | None,
     reservatorio: str | None,
 ) -> pd.DataFrame:
+    """Apply date and optional categorical filters to measurements.
+
+    Args:
+        df: Preprocessed measurements dataframe.
+        date_start: Initial date inclusive.
+        date_end: Final date inclusive.
+        subsistema: Optional subsystem filter, or ``Todos``.
+        uf: Optional UF filter, or ``Todos``.
+        reservatorio: Optional reservoir name filter, or ``Todos``.
+
+    Returns:
+        pd.DataFrame: Filtered dataframe.
+    """
     filtered = df[(df["data_medicao"] >= date_start) & (df["data_medicao"] <= date_end)]
     if subsistema and subsistema != "Todos":
         filtered = filtered[filtered["subsistema"] == subsistema]
@@ -73,6 +105,14 @@ def filter_data(
 
 
 def granularity_freq(granularity: str) -> str:
+    """Translate UI granularity labels to pandas frequency aliases.
+
+    Args:
+        granularity: One of ``Diario``, ``Semanal``, or ``Mensal``.
+
+    Returns:
+        str: Pandas resample frequency code.
+    """
     mapping = {
         "Diario": "D",
         "Semanal": "W-MON",
@@ -82,6 +122,7 @@ def granularity_freq(granularity: str) -> str:
 
 
 def to_csv_bytes(df: pd.DataFrame) -> bytes:
+    """Convert dataframe into UTF-8 CSV bytes for Streamlit download."""
     return df.to_csv(index=False).encode("utf-8")
 
 
@@ -96,6 +137,15 @@ def _mode_or_default(series: pd.Series) -> str:
 
 
 def series_by_granularity(df: pd.DataFrame, granularity: str) -> pd.DataFrame:
+    """Aggregate reservoir series by selected granularity.
+
+    Args:
+        df: Reservoir-specific dataframe.
+        granularity: UI granularity label.
+
+    Returns:
+        pd.DataFrame: Aggregated time series with mean numeric metrics and modal status.
+    """
     if df.empty:
         return df
 
@@ -142,6 +192,14 @@ def _volume_x_bounds(plot: pd.DataFrame) -> tuple[pd.Timestamp, pd.Timestamp] | 
 
 
 def _hydrology_figure(serie: pd.DataFrame) -> go.Figure:
+    """Build the dashboard hydrology figure for one reservoir.
+
+    Args:
+        serie: Aggregated series from ``series_by_granularity``.
+
+    Returns:
+        go.Figure: Multi-panel chart with volume, flows, and balance.
+    """
     plot = serie.dropna(subset=["volume_util_pct"]).copy()
     plot = plot.sort_values("data_medicao").reset_index(drop=True)
 
@@ -208,7 +266,7 @@ def _hydrology_figure(serie: pd.DataFrame) -> go.Figure:
             marker=dict(color="#7F8A96", size=7, line=dict(color="#ECEFF3", width=1)),
             text=plot["situacao_hidrologica"],
             name="Pontos",
-            hovertemplate="Data=%{x|%Y-%m-%d}<br>Volume=%{y:.2f}%<br>Situacao=%{text}<extra></extra>",
+            hovertemplate="Data=%{x|%Y-%m-%d}<br>Volume=%{y:.2f}<br>Situacao=%{text}<extra></extra>",
         ),
         row=1,
         col=1,
@@ -268,6 +326,7 @@ def _hydrology_figure(serie: pd.DataFrame) -> go.Figure:
 
 
 def main() -> None:
+    """Render dashboard app and handle user interaction widgets."""
     st.set_page_config(page_title="ANA Hydrology Dashboard", layout="wide")
     st.title("ANA Pipeline - Hidrologia")
 

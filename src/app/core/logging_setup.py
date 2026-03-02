@@ -1,3 +1,5 @@
+"""Centralized structured logging configuration for pipeline components."""
+
 from __future__ import annotations
 
 import logging
@@ -35,11 +37,14 @@ _EVENT_FIELDS_ORDER = (
 
 
 class _AppLoggerFilter(logging.Filter):
+    """Filter that keeps only project loggers in file output."""
+
     def filter(self, record: logging.LogRecord) -> bool:
         return record.name.startswith("app.")
 
 
 def _resolve_logs_dir() -> Path:
+    """Resolve directory where daily log files are written."""
     env_value = os.environ.get("APP_LOG_DIR", "").strip()
     if env_value:
         return Path(env_value)
@@ -53,6 +58,7 @@ def _ensure_console_handler(
     *,
     level: int,
 ) -> None:
+    """Create or update the dedicated console handler."""
     handler = next(
         (
             h
@@ -78,6 +84,7 @@ def _ensure_daily_file_handler(
     *,
     level: int,
 ) -> None:
+    """Create or rotate the daily file handler for project logs."""
     logs_dir = _resolve_logs_dir()
     logs_dir.mkdir(parents=True, exist_ok=True)
     today_path = logs_dir / f"ana_pipeline_{date.today().isoformat()}.log"
@@ -109,6 +116,14 @@ def _ensure_daily_file_handler(
 
 
 def configure_structured_logging(log_level: str = "INFO") -> None:
+    """Configure root logger with console and daily file handlers.
+
+    Args:
+        log_level: Logging level name, for example ``INFO`` or ``DEBUG``.
+
+    Side Effects:
+        Mutates global logging handlers and creates the logs directory if missing.
+    """
     level = getattr(logging, log_level.upper(), logging.INFO)
     formatter = logging.Formatter(_LOG_FORMAT)
     root_logger = logging.getLogger()
@@ -121,6 +136,14 @@ def configure_structured_logging(log_level: str = "INFO") -> None:
 
 
 def format_log_event(**fields: Any) -> str:
+    """Render event fields in a deterministic ``key=value`` sequence.
+
+    Args:
+        **fields: Arbitrary structured event fields.
+
+    Returns:
+        str: Serialized event string with known keys first and extras sorted.
+    """
     parts: list[str] = []
     for key in _EVENT_FIELDS_ORDER:
         if key not in fields:
