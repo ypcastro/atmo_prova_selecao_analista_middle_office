@@ -28,7 +28,7 @@ Se o ultimo comando retornar `status=success` ou `status=dry_run`, o pipeline es
 
 ## Conceitos importantes (simples)
 
-1. `snapshot`: usa [ana_snapshot.html](/C:/Users/iago.nascimento/GitHub/ANA_Pipeline/data/ana_snapshot.html), sempre igual, ideal para teste.
+1. `snapshot`: usa [ana_snapshot.html](data/ana_snapshot.html), sempre igual, ideal para teste.
 2. `live`: busca na ANA pela internet, ideal para historico real.
 3. `dry-run`: executa tudo, mas nao grava no banco.
 4. `watermark`: lembra a ultima data processada no modo `live`.
@@ -138,7 +138,7 @@ python -m streamlit run src/app/dashboard/streamlit_app.py
 .\scripts\update_reservatorios_diario.ps1 -UseYesterday -SyncCatalog
 ```
 
-Para agendar no fim do dia, veja o passo a passo em [RUNBOOK.md](/C:/Users/iago.nascimento/GitHub/ANA_Pipeline/RUNBOOK.md).
+Para agendar no fim do dia, veja o passo a passo em [RUNBOOK.md](RUNBOOK.md).
 
 ## Exemplo pratico: popular Tres Marias no mesmo range dos outros
 
@@ -189,6 +189,15 @@ while ($cursor -le $end) {
 
 Catalogo de usinas/reservatorios com `reservatorio_id`, nome, UF e subsistema.
 
+## Code Map
+
+1. `src/app/api`: endpoints FastAPI e contratos HTTP.
+2. `src/app/jobs`: orquestracao do job unitario e scheduler.
+3. `src/app/core`: config, transformacoes, storage, IO de artefatos e logging.
+4. `src/app/ana`: cliente/fetch/parser/catalogo de dados ANA.
+5. `src/app/dashboard`: interface Streamlit para analise hidrologica.
+6. `src/app/analysis`: agregacoes e indicadores derivados para API.
+
 ## Qualidade
 
 Rodar testes:
@@ -198,10 +207,18 @@ $env:PYTHONPATH='src'
 python -m pytest -q
 ```
 
+Validar padrao de documentacao:
+
+```powershell
+$env:PYTHONPATH='src'
+python -m pytest -q tests/test_documentation.py
+```
+
 Status atual esperado: suite verde.
 
 ## Documentos de apoio
 
-1. Operacao e troubleshooting: [RUNBOOK.md](/C:/Users/iago.nascimento/GitHub/ANA_Pipeline/RUNBOOK.md)
-2. Decisoes de engenharia: [DECISIONS.md](/C:/Users/iago.nascimento/GitHub/ANA_Pipeline/DECISIONS.md)
+1. Operacao e troubleshooting: [RUNBOOK.md](RUNBOOK.md)
+2. Decisoes de engenharia: [DECISIONS.md](DECISIONS.md)
+3. Padrao de documentacao tecnica: [docs/DOCUMENTATION_STYLE.md](docs/DOCUMENTATION_STYLE.md)
 

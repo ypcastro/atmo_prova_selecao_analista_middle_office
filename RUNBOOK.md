@@ -110,7 +110,7 @@ O script:
 Exemplo para rodar diariamente as 23:50:
 
 ```powershell
-schtasks /Create /TN "ANA_Daily_Update" /SC DAILY /ST 23:50 /F /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\iago.nascimento\GitHub\ANA_Pipeline\scripts\update_reservatorios_diario.ps1 -UseYesterday -SyncCatalog"
+schtasks /Create /TN "ANA_Daily_Update" /SC DAILY /ST 23:50 /F /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\GitHub\ANA_Pipeline\scripts\update_reservatorios_diario.ps1 -UseYesterday -SyncCatalog"
 ```
 
 Para verificar:
@@ -202,7 +202,8 @@ Acoes:
 ## 7) Checklist antes de entrega
 
 1. `python -m pytest -q` verde.
-2. `POST /extract/ana` funcional.
-3. `GET /ana/medicoes/{record_id}` retorna `404` para inexistente.
-4. `GET /ana/checkpoint` e `GET /ana/analysis` funcionando.
-5. `README`, `RUNBOOK`, `DECISIONS` coerentes com o codigo.
+2. `python -m pytest -q tests/test_documentation.py` verde.
+3. `POST /extract/ana` funcional.
+4. `GET /ana/medicoes/{record_id}` retorna `404` para inexistente.
+5. `GET /ana/checkpoint` e `GET /ana/analysis` funcionando.
+6. `README`, `RUNBOOK`, `DECISIONS` coerentes com o codigo.
