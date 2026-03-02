@@ -49,9 +49,27 @@ def test_fetch_records_filters_before_limit():
         con = init_db(db)
         try:
             rows = [
-                {"record_id": "A", "reservatorio_id": 1, "reservatorio": "X", "data_medicao": "2025-01-01", "uf": "SP"},
-                {"record_id": "B", "reservatorio_id": 1, "reservatorio": "X", "data_medicao": "2025-01-02", "uf": "SP"},
-                {"record_id": "C", "reservatorio_id": 2, "reservatorio": "Y", "data_medicao": "2025-01-03", "uf": "MG"},
+                {
+                    "record_id": "A",
+                    "reservatorio_id": 1,
+                    "reservatorio": "X",
+                    "data_medicao": "2025-01-01",
+                    "uf": "SP",
+                },
+                {
+                    "record_id": "B",
+                    "reservatorio_id": 1,
+                    "reservatorio": "X",
+                    "data_medicao": "2025-01-02",
+                    "uf": "SP",
+                },
+                {
+                    "record_id": "C",
+                    "reservatorio_id": 2,
+                    "reservatorio": "Y",
+                    "data_medicao": "2025-01-03",
+                    "uf": "MG",
+                },
             ]
             upsert_many(con, rows)
 
