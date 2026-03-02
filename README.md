@@ -164,7 +164,7 @@ $env:PYTHONPATH='src'
 python -m app.jobs.scheduler
 ```
 
-### 5) Dashboard Streamlit (opcional)
+### 5) Dashboard Streamlit
 
 ```powershell
 python -m pip install -r requirements-streamlit.txt
