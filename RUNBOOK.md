@@ -79,6 +79,46 @@ python -m app.ana.catalog sync --json
 python -m app.ana.catalog list --limit 1000
 ```
 
+### 3.3 Atualizacao diaria de todos os reservatorios do catalogo
+
+Rodar manual (data de hoje):
+
+```powershell
+.\scripts\update_reservatorios_diario.ps1 -SyncCatalog
+```
+
+Rodar para uma data especifica:
+
+```powershell
+.\scripts\update_reservatorios_diario.ps1 -TargetDate '2026-03-01' -SyncCatalog
+```
+
+Rodar para ontem:
+
+```powershell
+.\scripts\update_reservatorios_diario.ps1 -UseYesterday -SyncCatalog
+```
+
+O script:
+
+1. Carrega todos os `reservatorio_id` da tabela `ana_reservatorios`.
+2. Roda extracao live para cada um no mesmo dia (`since=until`).
+3. Salva resumo CSV em `data/out/backfill/daily_update_*.csv`.
+
+### 3.4 Agendar no fim do dia (Windows Task Scheduler)
+
+Exemplo para rodar diariamente as 23:50:
+
+```powershell
+schtasks /Create /TN "ANA_Daily_Update" /SC DAILY /ST 23:50 /F /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\iago.nascimento\GitHub\ANA_Pipeline\scripts\update_reservatorios_diario.ps1 -UseYesterday -SyncCatalog"
+```
+
+Para verificar:
+
+```powershell
+schtasks /Query /TN "ANA_Daily_Update" /V /FO LIST
+```
+
 ## 4) Artefatos gerados
 
 1. Banco: `data/out/ana.db`

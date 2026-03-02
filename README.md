@@ -114,6 +114,14 @@ $env:PYTHONPATH='src'
 python -m streamlit run src/app/dashboard/streamlit_app.py
 ```
 
+### 6) Atualizacao diaria de todos os reservatorios cadastrados
+
+```powershell
+.\scripts\update_reservatorios_diario.ps1 -UseYesterday -SyncCatalog
+```
+
+Para agendar no fim do dia, veja o passo a passo em [RUNBOOK.md](/C:/Users/iago.nascimento/GitHub/ANA_Pipeline/RUNBOOK.md).
+
 ## Exemplo pratico: popular Três Marias no mesmo range dos outros
 
 ```powershell
