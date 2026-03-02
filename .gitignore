@@ -213,3 +213,4 @@ data/out/watermark.json
 data/out/raw/
 data/out/normalized/
 data/out/backfill/
+logs/

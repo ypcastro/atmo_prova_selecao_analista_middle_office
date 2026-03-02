@@ -72,7 +72,7 @@ Trade-off:
 
 ## 9) Logging e tratamento de erros
 
-1. Logging estruturado em JSON nos pontos principais (`start`, `fetch`, `parse`, `load`, `finish`, `fail`).
+1. Logging estruturado em formato simples `chave=valor` nos pontos principais (`start`, `fetch`, `parse`, `load`, `finish`, `fail`).
 2. Campos chave: `job_name`, `run_id`, `step`, `records_in`, `records_out`, `invalid`, `duration_ms`.
 3. Erros nao sao silenciados; falha gera checkpoint `fail` e excecao e propagada no job.
 
