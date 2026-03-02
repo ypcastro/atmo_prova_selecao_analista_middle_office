@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+"""Simple fixed-interval scheduler for repeated ANA extraction runs."""
+
+from __future__ import annotations
 
 import logging
 import time
@@ -29,6 +31,11 @@ def _log_event(logger: logging.Logger, level: int, **fields: object) -> None:
 
 
 def main_loop() -> None:
+    """Run extraction indefinitely at configured intervals.
+
+    Side Effects:
+        Executes job runs, writes logs, and sleeps between ticks forever.
+    """
     logger = _configure_logging()
     s = load_settings()
     interval = max(1, int(s.pipeline_interval_seconds))

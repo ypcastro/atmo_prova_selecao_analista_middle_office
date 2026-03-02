@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+"""Single-run extraction job that ingests ANA measurements into SQLite."""
+
+from __future__ import annotations
 
 import argparse
 import json
@@ -56,6 +58,21 @@ def _resolve_window(
     *,
     now_utc: datetime,
 ) -> tuple[date, date, str | None, str]:
+    """Resolve extraction date range considering CLI options and watermark.
+
+    Args:
+        settings: Runtime settings loaded from environment.
+        io: Pipeline I/O helper used to read watermarks.
+        options: Runtime execution options from CLI.
+        now_utc: Current UTC datetime used for incremental default ranges.
+
+    Returns:
+        tuple[date, date, str | None, str]:
+            ``(data_inicial, data_final, watermark_key, window_source)``.
+
+    Side Effects:
+        Reads watermark file when running in ``live`` mode without explicit dates.
+    """
     data_inicial = settings.ana_data_inicial
     data_final = settings.ana_data_final
     watermark_key: str | None = None
@@ -91,6 +108,19 @@ def _resolve_window(
 def _load_html(
     settings: Settings, *, data_inicial: date, data_final: date
 ) -> tuple[str, str]:
+    """Load raw ANA HTML according to execution mode.
+
+    Args:
+        settings: Runtime settings with extraction mode and reservoir id.
+        data_inicial: Start date for ``live`` requests.
+        data_final: End date for ``live`` requests.
+
+    Returns:
+        tuple[str, str]: ``(source, html)`` where source is ``live`` or ``snapshot``.
+
+    Side Effects:
+        Performs network call in ``live`` mode.
+    """
     if settings.ana_mode == "live":
         url = build_ana_url(
             reservatorio=settings.ana_reservatorio,
@@ -105,6 +135,14 @@ def _load_html(
 
 
 def _max_data_medicao(rows: list[dict[str, Any]]) -> str | None:
+    """Return maximum ``data_medicao`` value from processed rows.
+
+    Args:
+        rows: Normalized measurement rows.
+
+    Returns:
+        str | None: Lexicographically highest date string or ``None`` when empty.
+    """
     values = [str(row["data_medicao"]) for row in rows if row.get("data_medicao")]
     if not values:
         return None
@@ -301,6 +339,15 @@ def _merge_metadata(
     base: dict[int, dict[str, Any]],
     override: dict[int, dict[str, Any]],
 ) -> dict[int, dict[str, Any]]:
+    """Merge reservoir metadata preferring non-empty values from ``override``.
+
+    Args:
+        base: Base metadata map, usually from DB catalog.
+        override: Override metadata map, usually from CSV.
+
+    Returns:
+        dict[int, dict[str, Any]]: Merged metadata dictionary by reservoir id.
+    """
     output: dict[int, dict[str, Any]] = {rid: dict(meta) for rid, meta in base.items()}
     for rid, extra in override.items():
         target = output.setdefault(rid, {})
@@ -312,6 +359,14 @@ def _merge_metadata(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run extraction once from CLI arguments.
+
+    Args:
+        argv: Optional argument list for tests/embedding.
+
+    Returns:
+        int: Process exit code, ``0`` on success.
+    """
     parser = argparse.ArgumentParser(description="Run ANA extraction job once")
     parser.add_argument(
         "--dry-run", action="store_true", help="Run extraction without writing to DB."
