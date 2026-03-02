@@ -1,3 +1,5 @@
+"""Reservoir catalog fetch/sync utilities for ANA MedicaoSin."""
+
 from __future__ import annotations
 
 import argparse
@@ -212,6 +214,11 @@ def _print_table(rows: list[dict[str, Any]]) -> None:
 
 
 def main() -> None:
+    """Run catalog CLI commands for sync or listing.
+
+    Side Effects:
+        May call ANA endpoints and write to SQLite when using ``sync``.
+    """
     parser = argparse.ArgumentParser(description="ANA reservoir catalog utility")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
