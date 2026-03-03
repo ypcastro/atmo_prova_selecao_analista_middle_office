@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Query
 
 from app.ana.catalog import sync_catalog_to_db
@@ -9,12 +11,23 @@ from app.analysis.ana_analysis import run_analysis
 from app.core.config import load_settings
 from app.core.pipeline_io import PipelineIO
 from app.core.storage import (
+    connect_db,
     fetch_by_id,
     fetch_records,
     fetch_reservoir_catalog,
     init_db,
 )
 from app.jobs.extract_job import run_once
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Initialize database schema once when API process starts."""
+    s = load_settings()
+    con = init_db(s.db_path)
+    con.close()
+    yield
+
 
 app = FastAPI(
     title="ANA Pipeline Challenge",
@@ -23,6 +36,7 @@ app = FastAPI(
         "HTTP interface to run extraction jobs, query measurements, and inspect "
         "pipeline operational artifacts."
     ),
+    lifespan=lifespan,
 )
 
 
@@ -38,7 +52,7 @@ def health() -> dict[str, str]:
         dict[str, str]: Status payload with ``status=ok`` when initialization works.
     """
     s = load_settings()
-    con = init_db(s.db_path)
+    con = connect_db(s.db_path)
     con.close()
     return {"status": "ok"}
 
@@ -100,7 +114,7 @@ def list_medicoes(
         list[dict[str, object]]: Measurement rows sorted by date and record id.
     """
     s = load_settings()
-    con = init_db(s.db_path)
+    con = connect_db(s.db_path)
     try:
         rows = fetch_records(
             con,
@@ -132,7 +146,7 @@ def get_medicao(record_id: str) -> dict[str, object]:
         dict[str, object]: Matching measurement row.
     """
     s = load_settings()
-    con = init_db(s.db_path)
+    con = connect_db(s.db_path)
     try:
         row = fetch_by_id(con, record_id)
     finally:
@@ -155,7 +169,7 @@ def analysis() -> dict[str, object]:
         dict[str, object]: Aggregate statistics produced by ``run_analysis``.
     """
     s = load_settings()
-    con = init_db(s.db_path)
+    con = connect_db(s.db_path)
     try:
         rows = fetch_records(con, limit=100000)
     finally:
@@ -198,7 +212,7 @@ def list_reservatorios(
         list[dict[str, object]]: Catalog rows.
     """
     s = load_settings()
-    con = init_db(s.db_path)
+    con = connect_db(s.db_path)
     try:
         return fetch_reservoir_catalog(con, limit=limit, uf=uf)
     finally:
