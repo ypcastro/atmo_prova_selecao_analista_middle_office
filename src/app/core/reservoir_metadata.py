@@ -40,7 +40,7 @@ def load_reservoir_metadata(data_dir: Path) -> dict[int, dict[str, Any]]:
             entry: dict[str, Any] = {}
             for field in _META_FIELDS:
                 value = _clean_text(row.get(field))
-                if field == "uf" and value is not None:
+                if field in {"uf", "subsistema"} and value is not None:
                     value = value.upper()
                 entry[field] = value
 
