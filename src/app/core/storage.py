@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterable as IterableABC
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -50,6 +51,16 @@ _RESERVOIR_COLUMNS = (
     "source",
     "updated_at_utc",
 )
+
+_IN_CHUNK_SIZE = 900
+
+
+def connect_db(db_path: Path) -> sqlite3.Connection:
+    """Open SQLite connection with row factory set."""
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    return con
 
 
 def _create_medicoes_table(
@@ -164,9 +175,7 @@ def _ensure_reservoir_columns(con: sqlite3.Connection) -> None:
 
 def init_db(db_path: Path) -> sqlite3.Connection:
     """Create SQLite schema and return a ready connection."""
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
+    con = connect_db(db_path)
 
     _create_medicoes_table(con)
     _create_reservatorios_table(con)
@@ -188,12 +197,60 @@ def init_db(db_path: Path) -> sqlite3.Connection:
     return con
 
 
+def _existing_keys(
+    con: sqlite3.Connection,
+    *,
+    table_name: str,
+    key_name: str,
+    keys: IterableABC[Any],
+) -> set[Any]:
+    unique_keys = [key for key in dict.fromkeys(keys) if key is not None]
+    if not unique_keys:
+        return set()
+
+    output: set[Any] = set()
+    for offset in range(0, len(unique_keys), _IN_CHUNK_SIZE):
+        chunk = unique_keys[offset : offset + _IN_CHUNK_SIZE]
+        placeholders = ", ".join("?" for _ in chunk)
+        rows = con.execute(
+            f"""
+            SELECT {key_name}
+            FROM {table_name}
+            WHERE {key_name} IN ({placeholders})
+            """,
+            tuple(chunk),
+        ).fetchall()
+        output.update(row[0] for row in rows if row[0] is not None)
+    return output
+
+
 def upsert_many(
     con: sqlite3.Connection, rows: Iterable[dict[str, Any]]
 ) -> UpsertResult:
     """Insert rows idempotently and return inserted/existing counts."""
-    insert_sql = """
-        INSERT OR IGNORE INTO ana_medicoes (
+    payloads = [{column: row.get(column) for column in _COLUMNS} for row in rows]
+    if not payloads:
+        return UpsertResult(inserted=0, existing=0)
+
+    existing_ids = _existing_keys(
+        con,
+        table_name="ana_medicoes",
+        key_name="record_id",
+        keys=(payload.get("record_id") for payload in payloads),
+    )
+    known_ids = set(existing_ids)
+    inserted = 0
+    existing = 0
+    for payload in payloads:
+        record_id = payload.get("record_id")
+        if record_id in known_ids:
+            existing += 1
+        else:
+            inserted += 1
+            known_ids.add(record_id)
+
+    upsert_sql = """
+        INSERT INTO ana_medicoes (
             record_id,
             reservatorio_id,
             reservatorio,
@@ -228,10 +285,7 @@ def upsert_many(
             :balanco_vazao_m3s,
             :situacao_hidrologica
         )
-    """
-    update_sql = """
-        UPDATE ana_medicoes
-        SET
+        ON CONFLICT(record_id) DO UPDATE SET
             reservatorio_id = :reservatorio_id,
             reservatorio = :reservatorio,
             data_medicao = :data_medicao,
@@ -247,20 +301,8 @@ def upsert_many(
             subsistema = :subsistema,
             balanco_vazao_m3s = :balanco_vazao_m3s,
             situacao_hidrologica = :situacao_hidrologica
-        WHERE record_id = :record_id
     """
-
-    inserted = 0
-    existing = 0
-
-    for row in rows:
-        payload = {column: row.get(column) for column in _COLUMNS}
-        cursor = con.execute(insert_sql, payload)
-        if cursor.rowcount == 1:
-            inserted += 1
-        else:
-            existing += 1
-            con.execute(update_sql, payload)
+    con.executemany(upsert_sql, payloads)
 
     con.commit()
     return UpsertResult(inserted=inserted, existing=existing)
@@ -327,10 +369,33 @@ def upsert_reservoir_catalog(
 ) -> UpsertResult:
     """Upsert structured reservoir catalog rows."""
     now_utc = datetime.now(timezone.utc).isoformat()
+    payloads = []
+    for row in rows:
+        payload = {column: row.get(column) for column in _RESERVOIR_COLUMNS}
+        payload["updated_at_utc"] = payload.get("updated_at_utc") or now_utc
+        payloads.append(payload)
+    if not payloads:
+        return UpsertResult(inserted=0, existing=0)
+
+    existing_ids = _existing_keys(
+        con,
+        table_name="ana_reservatorios",
+        key_name="reservatorio_id",
+        keys=(payload.get("reservatorio_id") for payload in payloads),
+    )
+    known_ids = set(existing_ids)
     inserted = 0
     existing = 0
-    insert_sql = """
-        INSERT OR IGNORE INTO ana_reservatorios (
+    for payload in payloads:
+        reservoir_id = payload.get("reservatorio_id")
+        if reservoir_id in known_ids:
+            existing += 1
+        else:
+            inserted += 1
+            known_ids.add(reservoir_id)
+
+    upsert_sql = """
+        INSERT INTO ana_reservatorios (
             reservatorio_id,
             reservatorio,
             estado_codigo_ana,
@@ -349,10 +414,7 @@ def upsert_reservoir_catalog(
             :source,
             :updated_at_utc
         )
-    """
-    update_sql = """
-        UPDATE ana_reservatorios
-        SET
+        ON CONFLICT(reservatorio_id) DO UPDATE SET
             reservatorio = :reservatorio,
             estado_codigo_ana = :estado_codigo_ana,
             estado_nome = :estado_nome,
@@ -360,18 +422,8 @@ def upsert_reservoir_catalog(
             subsistema = :subsistema,
             source = :source,
             updated_at_utc = :updated_at_utc
-        WHERE reservatorio_id = :reservatorio_id
     """
-
-    for row in rows:
-        payload = {column: row.get(column) for column in _RESERVOIR_COLUMNS}
-        payload["updated_at_utc"] = payload.get("updated_at_utc") or now_utc
-        cursor = con.execute(insert_sql, payload)
-        if cursor.rowcount == 1:
-            inserted += 1
-        else:
-            existing += 1
-            con.execute(update_sql, payload)
+    con.executemany(upsert_sql, payloads)
 
     con.commit()
     return UpsertResult(inserted=inserted, existing=existing)
