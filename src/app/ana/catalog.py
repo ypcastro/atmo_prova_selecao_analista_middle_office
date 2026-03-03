@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import time
 import unicodedata
@@ -14,6 +13,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.core.config import load_settings
+from app.core.reservoir_metadata import load_reservoir_metadata
 from app.core.storage import fetch_reservoir_catalog, init_db, upsert_reservoir_catalog
 from app.core.subsystems import infer_subsistema_from_uf_text
 
@@ -74,28 +74,6 @@ def _parse_options(html: str, select_id: str) -> list[tuple[str, str]]:
         if not value or not label:
             continue
         output.append((value, " ".join(label.split())))
-    return output
-
-
-def _load_optional_metadata_csv(data_dir: Path) -> dict[int, dict[str, Any]]:
-    path = data_dir / "reservatorios_metadata.csv"
-    if not path.exists():
-        return {}
-
-    output: dict[int, dict[str, Any]] = {}
-    with path.open("r", encoding="utf-8", newline="") as file_obj:
-        reader = csv.DictReader(file_obj)
-        for row in reader:
-            rid_raw = str(row.get("reservatorio_id") or "").strip()
-            if not rid_raw.isdigit():
-                continue
-            rid = int(rid_raw)
-            output[rid] = {
-                "uf": (str(row.get("uf") or "").strip().upper() or None),
-                "subsistema": (
-                    str(row.get("subsistema") or "").strip().upper() or None
-                ),
-            }
     return output
 
 
@@ -172,7 +150,7 @@ def sync_catalog_to_db(
 ) -> dict[str, Any]:
     """Fetch ANA reservoir catalog and upsert into ana_reservatorios table."""
     rows = fetch_reservoir_catalog_from_ana(timeout_s=timeout_s, pause_s=pause_s)
-    metadata = _load_optional_metadata_csv(data_dir) if data_dir is not None else {}
+    metadata = load_reservoir_metadata(data_dir) if data_dir is not None else {}
     for row in rows:
         extra = metadata.get(int(row["reservatorio_id"]))
         if not extra:
