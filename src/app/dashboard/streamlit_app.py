@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -126,6 +127,13 @@ def to_csv_bytes(df: pd.DataFrame) -> bytes:
     return df.to_csv(index=False).encode("utf-8")
 
 
+def safe_file_token(value: str) -> str:
+    """Return a filesystem-safe token for file names."""
+    normalized = re.sub(r"[^a-zA-Z0-9]+", "_", value.strip().lower())
+    normalized = normalized.strip("_")
+    return normalized or "filtro"
+
+
 def _mode_or_default(series: pd.Series) -> str:
     clean = series.dropna()
     if clean.empty:
@@ -167,6 +175,45 @@ def series_by_granularity(df: pd.DataFrame, granularity: str) -> pd.DataFrame:
     return agg.reset_index()
 
 
+def subsystem_daily_mean(df: pd.DataFrame) -> pd.DataFrame:
+    """Build daily subsystem series by averaging all reservoirs each day."""
+    if df.empty:
+        return df
+
+    metrics = ["volume_util_pct", "afluencia_m3s", "defluencia_m3s", "balanco_vazao_m3s"]
+    daily = (
+        df.groupby("data_medicao", as_index=False)[metrics]
+        .mean()
+        .sort_values("data_medicao")
+    )
+    daily["situacao_hidrologica"] = "agregado"
+    return daily
+
+
+def reservoir_period_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """Compute per-reservoir mean metrics for the selected period."""
+    if df.empty:
+        return df
+
+    summary = (
+        df.groupby(["reservatorio", "uf"], dropna=False)[
+            ["volume_util_pct", "afluencia_m3s", "defluencia_m3s", "balanco_vazao_m3s"]
+        ]
+        .mean()
+        .reset_index()
+        .rename(
+            columns={
+                "volume_util_pct": "volume_util_medio_pct",
+                "afluencia_m3s": "afluencia_media_m3s",
+                "defluencia_m3s": "defluencia_media_m3s",
+                "balanco_vazao_m3s": "balanco_medio_m3s",
+            }
+        )
+        .sort_values("volume_util_medio_pct", ascending=False)
+    )
+    return summary
+
+
 def _apply_plot_style(fig: go.Figure) -> go.Figure:
     fig.update_layout(
         template="plotly_white",
@@ -192,7 +239,7 @@ def _volume_x_bounds(plot: pd.DataFrame) -> tuple[pd.Timestamp, pd.Timestamp] | 
 
 
 def _hydrology_figure(serie: pd.DataFrame) -> go.Figure:
-    """Build the dashboard hydrology figure for one reservoir.
+    """Build the dashboard hydrology figure for the selected view.
 
     Args:
         serie: Aggregated series from ``series_by_granularity``.
@@ -354,6 +401,12 @@ def main() -> None:
     df = preprocess(base_df)
 
     st.sidebar.subheader("Filtros")
+    view_mode = st.sidebar.radio(
+        "Visualizacao",
+        options=["Por reservatorios", "Por subsistema"],
+        index=0,
+    )
+
     min_date = df["data_medicao"].min().date()
     max_date = df["data_medicao"].max().date()
     date_range = st.sidebar.date_input(
@@ -372,38 +425,112 @@ def main() -> None:
     period_df = df[
         (df["data_medicao"] >= date_start) & (df["data_medicao"] <= date_end)
     ]
-    subs_options = sorted(period_df["subsistema"].dropna().unique().tolist())
-    selected_sub = st.sidebar.selectbox(
-        "Subsistema", options=["Todos", *subs_options], index=0
-    )
-
-    uf_base = (
-        period_df
-        if selected_sub == "Todos"
-        else period_df[period_df["subsistema"] == selected_sub]
-    )
-    uf_options = sorted(uf_base["uf"].dropna().unique().tolist())
-    selected_uf = st.sidebar.selectbox("UF", options=["Todos", *uf_options], index=0)
-
-    res_base = (
-        uf_base if selected_uf == "Todos" else uf_base[uf_base["uf"] == selected_uf]
-    )
-    res_options = sorted(res_base["reservatorio"].dropna().unique().tolist())
-    selected_reservatorio = st.sidebar.selectbox(
-        "Reservatorio", options=["Todos", *res_options], index=0
-    )
-
     granularity = st.sidebar.selectbox(
         "Granularidade", options=["Diario", "Semanal", "Mensal"], index=2
+    )
+
+    if view_mode == "Por reservatorios":
+        subs_options = sorted(period_df["subsistema"].dropna().unique().tolist())
+        selected_sub = st.sidebar.selectbox(
+            "Subsistema", options=["Todos", *subs_options], index=0
+        )
+
+        uf_base = (
+            period_df
+            if selected_sub == "Todos"
+            else period_df[period_df["subsistema"] == selected_sub]
+        )
+        uf_options = sorted(uf_base["uf"].dropna().unique().tolist())
+        selected_uf = st.sidebar.selectbox(
+            "UF", options=["Todos", *uf_options], index=0
+        )
+
+        res_base = (
+            uf_base if selected_uf == "Todos" else uf_base[uf_base["uf"] == selected_uf]
+        )
+        res_options = sorted(res_base["reservatorio"].dropna().unique().tolist())
+        selected_reservatorio = st.sidebar.selectbox(
+            "Reservatorio", options=["Todos", *res_options], index=0
+        )
+
+        filtered = filter_data(
+            df,
+            date_start=date_start,
+            date_end=date_end,
+            subsistema=selected_sub,
+            uf=selected_uf,
+            reservatorio=selected_reservatorio,
+        )
+        if filtered.empty:
+            st.warning("Nenhum dado para os filtros selecionados.")
+            return
+
+        st.download_button(
+            label="Baixar CSV filtrado",
+            data=to_csv_bytes(filtered),
+            file_name="ana_medicoes_filtrado.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Registros", int(len(filtered)))
+        c2.metric("Reservatorios", int(filtered["reservatorio_id"].nunique()))
+        c3.metric("Data inicial", str(filtered["data_medicao"].min().date()))
+        c4.metric("Data final", str(filtered["data_medicao"].max().date()))
+
+        st.subheader("Hidrologia")
+        focus_options = sorted(filtered["reservatorio"].dropna().unique().tolist())
+        if not focus_options:
+            st.info("Sem reservatorios no filtro atual.")
+            return
+
+        if selected_reservatorio == "Todos":
+            selected_focus = st.selectbox(
+                "Reservatorio foco", options=focus_options, index=0
+            )
+        else:
+            selected_focus = selected_reservatorio
+            st.caption(f"Reservatorio foco: {selected_focus}")
+
+        focus_df = filtered[filtered["reservatorio"] == selected_focus].copy()
+        serie = series_by_granularity(focus_df, granularity)
+        if serie.empty:
+            st.info("Sem dados para o reservatorio selecionado.")
+            return
+
+        st.caption(f"Granularidade: {granularity}")
+        st.plotly_chart(_hydrology_figure(serie), use_container_width=True)
+
+        st.subheader("Comparativo de volume util medio")
+        comp = (
+            filtered.groupby(["reservatorio", "subsistema"], dropna=False)[
+                "volume_util_pct"
+            ]
+            .mean()
+            .reset_index(name="volume_util_medio_pct")
+            .sort_values("volume_util_medio_pct", ascending=False)
+        )
+        st.dataframe(comp, use_container_width=True, hide_index=True)
+        return
+
+    sub_options = sorted(period_df["subsistema"].dropna().unique().tolist())
+    if not sub_options:
+        st.warning("Nao ha dados no periodo selecionado.")
+        return
+    selected_subsystem = st.sidebar.selectbox(
+        "Subsistema",
+        options=sub_options,
+        index=0,
     )
 
     filtered = filter_data(
         df,
         date_start=date_start,
         date_end=date_end,
-        subsistema=selected_sub,
-        uf=selected_uf,
-        reservatorio=selected_reservatorio,
+        subsistema=selected_subsystem,
+        uf="Todos",
+        reservatorio="Todos",
     )
     if filtered.empty:
         st.warning("Nenhum dado para os filtros selecionados.")
@@ -412,7 +539,7 @@ def main() -> None:
     st.download_button(
         label="Baixar CSV filtrado",
         data=to_csv_bytes(filtered),
-        file_name="ana_medicoes_filtrado.csv",
+        file_name=f"ana_medicoes_{safe_file_token(selected_subsystem)}_filtrado.csv",
         mime="text/csv",
         use_container_width=True,
     )
@@ -423,39 +550,20 @@ def main() -> None:
     c3.metric("Data inicial", str(filtered["data_medicao"].min().date()))
     c4.metric("Data final", str(filtered["data_medicao"].max().date()))
 
-    st.subheader("Hidrologia")
-    focus_options = sorted(filtered["reservatorio"].dropna().unique().tolist())
-    if not focus_options:
-        st.info("Sem reservatorios no filtro atual.")
-        return
-
-    if selected_reservatorio == "Todos":
-        selected_focus = st.selectbox(
-            "Reservatorio foco", options=focus_options, index=0
-        )
-    else:
-        selected_focus = selected_reservatorio
-        st.caption(f"Reservatorio foco: {selected_focus}")
-
-    focus_df = filtered[filtered["reservatorio"] == selected_focus].copy()
-    serie = series_by_granularity(focus_df, granularity)
+    st.subheader(f"Hidrologia por subsistema: {selected_subsystem}")
+    subsystem_daily = subsystem_daily_mean(filtered)
+    serie = series_by_granularity(subsystem_daily, granularity)
     if serie.empty:
-        st.info("Sem dados para o reservatorio selecionado.")
+        st.info("Sem dados agregados para o subsistema selecionado.")
         return
-
-    st.caption(f"Granularidade: {granularity}")
+    st.caption(
+        f"Granularidade: {granularity}. No modo Diario, cada ponto e a media dos reservatorios do subsistema no dia."
+    )
     st.plotly_chart(_hydrology_figure(serie), use_container_width=True)
 
-    st.subheader("Comparativo de volume util medio")
-    comp = (
-        filtered.groupby(["reservatorio", "subsistema"], dropna=False)[
-            "volume_util_pct"
-        ]
-        .mean()
-        .reset_index(name="volume_util_medio_pct")
-        .sort_values("volume_util_medio_pct", ascending=False)
-    )
-    st.dataframe(comp, use_container_width=True, hide_index=True)
+    st.subheader("Medias por reservatorio no periodo")
+    summary = reservoir_period_summary(filtered)
+    st.dataframe(summary, use_container_width=True, hide_index=True)
 
 
 if __name__ == "__main__":
