@@ -1,22 +1,33 @@
+version: "3.9"
+
 services:
   api:
     build: .
     ports:
       - "8000:8000"
+    volumes:
+      - ./data:/app/data
     environment:
-      - APP_DATA_DIR=/app/data
-      - ANA_MODE=snapshot
-      - PIPELINE_INTERVAL_SECONDS=60
-  scheduler:
-    build: .
-    environment:
-      - APP_DATA_DIR=/app/data
-      - ANA_MODE=snapshot
-      - PIPELINE_INTERVAL_SECONDS=60
-    command: ["python", "-m", "app.jobs.scheduler"]
+      APP_DATA_DIR: /app/data
+      ANA_MODE: ${ANA_MODE:-snapshot}
+      ANA_RESERVATORIO: ${ANA_RESERVATORIO:-19091}
+      ANA_DATA_INICIAL: ${ANA_DATA_INICIAL:-2025-10-01}
+      ANA_DATA_FINAL: ${ANA_DATA_FINAL:-2025-10-07}
+      PIPELINE_INTERVAL_SECONDS: ${PIPELINE_INTERVAL_SECONDS:-60}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
   tests:
     build: .
+    command: ["pytest", "-q", "--tb=short"]
+    volumes:
+      - ./data:/app/data
+      - ./tests:/app/tests
     environment:
-      - APP_DATA_DIR=/app/data
-      - ANA_MODE=snapshot
-    command: ["pytest", "-q"]
+      APP_DATA_DIR: /app/data
+      ANA_MODE: snapshot
+    profiles:
+      - test
