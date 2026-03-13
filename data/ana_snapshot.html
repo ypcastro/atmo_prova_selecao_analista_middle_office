@@ -1,34 +1,96 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
-<head><meta charset="utf-8"/><title>ANA SAR - Medição SIN (Snapshot)</title></head>
+<head>
+  <meta charset="UTF-8">
+  <title>ANA - Medições SAR</title>
+</head>
 <body>
-  <h1>Dados de operação dos reservatórios SIN — Snapshot</h1>
-  <p>Fonte: https://www.ana.gov.br/sar0/MedicaoSin (modo snapshot para testes)</p>
-
-  <h2>Registros</h2>
-  <table id="registros">
+<h2>Medições - Reservatório 19091</h2>
+<table id="tblMedicao" border="1" cellpadding="4" cellspacing="0">
+  <thead>
     <tr>
-      <th>Código do Reservatório</th>
-      <th>Reservatório</th>
+      <th>Data</th>
       <th>Cota (m)</th>
       <th>Afluência (m³/s)</th>
       <th>Defluência (m³/s)</th>
       <th>Vazão Vertida (m³/s)</th>
       <th>Vazão Turbinada (m³/s)</th>
-      <th>Vazão Natural (m³/s)</th>
+      <th>Nível Montante (m)</th>
       <th>Volume Útil (%)</th>
-      <th>Vazão Incremental (m³/s)</th>
-      <th>Data da Medição</th>
     </tr>
-    <tr><td>19091</td><td>SANTA BRANCA</td><td>613,18</td><td>112,65</td><td>124,00</td><td>0,00</td><td>124,00</td><td>39,63</td><td>37,22</td><td>12,28</td><td>01/10/2025</td></tr>
-    <tr><td>19091</td><td>SANTA BRANCA</td><td>613,10</td><td>112,87</td><td>128,00</td><td>0,00</td><td>128,00</td><td>37,98</td><td>36,79</td><td>12,24</td><td>02/10/2025</td></tr>
-    <tr><td>19091</td><td>SANTA BRANCA</td><td>613,02</td><td>112,87</td><td>128,00</td><td>0,00</td><td>128,00</td><td>37,39</td><td>36,37</td><td>11,23</td><td>03/10/2025</td></tr>
-    <tr><td>19091</td><td>SANTA BRANCA</td><td>612,95</td><td>114,76</td><td>128,00</td><td>0,00</td><td>128,00</td><td>40,55</td><td>36,00</td><td>12,87</td><td>04/10/2025</td></tr>
-    <tr><td>19091</td><td>SANTA BRANCA</td><td>612,87</td><td>114,87</td><td>130,00</td><td>0,00</td><td>130,00</td><td>41,46</td><td>35,57</td><td>12,97</td><td>05/10/2025</td></tr>
-    <tr><td>19091</td><td>SANTA BRANCA</td><td>612,75</td><td>113,31</td><td>136,00</td><td>0,00</td><td>136,00</td><td>38,77</td><td>34,93</td><td>11,40</td><td>06/10/2025</td></tr>
-    <tr><td>19091</td><td>SANTA BRANCA</td><td>612,66</td><td>118,98</td><td>136,00</td><td>0,00</td><td>136,00</td><td>37,61</td><td>34,45</td><td>5,06</td><td>07/10/2025</td></tr>
-    <!-- duplicate record_id intentionally -->
-    <tr><td>19091</td><td>SANTA BRANCA</td><td>612,66</td><td>118,98</td><td>136,00</td><td>0,00</td><td>136,00</td><td>37,61</td><td>34,45</td><td>5,06</td><td>07/10/2025</td></tr>
-  </table>
+  </thead>
+  <tbody>
+    <tr>
+      <td>01/10/2025</td>
+      <td>615,22</td>
+      <td>1.234,56</td>
+      <td>980,00</td>
+      <td>0,00</td>
+      <td>980,00</td>
+      <td>615,22</td>
+      <td>72,30</td>
+    </tr>
+    <tr>
+      <td>02/10/2025</td>
+      <td>615,45</td>
+      <td>1.300,10</td>
+      <td>1.000,00</td>
+      <td>0,00</td>
+      <td>1.000,00</td>
+      <td>615,45</td>
+      <td>73,10</td>
+    </tr>
+    <tr>
+      <td>03/10/2025</td>
+      <td>615,80</td>
+      <td>1.450,20</td>
+      <td>1.100,00</td>
+      <td>50,00</td>
+      <td>1.050,00</td>
+      <td>615,80</td>
+      <td>74,50</td>
+    </tr>
+    <tr>
+      <td>04/10/2025</td>
+      <td>616,10</td>
+      <td>1.520,30</td>
+      <td>1.200,00</td>
+      <td>100,00</td>
+      <td>1.100,00</td>
+      <td>616,10</td>
+      <td>75,20</td>
+    </tr>
+    <tr>
+      <td>05/10/2025</td>
+      <td>615,90</td>
+      <td>1.100,00</td>
+      <td>1.150,00</td>
+      <td>80,00</td>
+      <td>1.070,00</td>
+      <td>615,90</td>
+      <td>74,80</td>
+    </tr>
+    <tr>
+      <td>06/10/2025</td>
+      <td>615,60</td>
+      <td>950,40</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td>615,60</td>
+      <td>73,90</td>
+    </tr>
+    <tr>
+      <td>07/10/2025</td>
+      <td>615,35</td>
+      <td>870,00</td>
+      <td>900,00</td>
+      <td>0,00</td>
+      <td>900,00</td>
+      <td>615,35</td>
+      <td>73,00</td>
+    </tr>
+  </tbody>
+</table>
 </body>
 </html>
