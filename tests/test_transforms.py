@@ -1,6 +1,6 @@
 import pytest
 from app.core.transforms import dedupe, normalize_record, validate_record
-
+from datetime import datetime
 
 def test_dedupe_preserves_first():
     rows = [{"record_id": "A", "x": 1}, {"record_id": "A", "x": 2}, {"record_id": "B", "x": 3}]

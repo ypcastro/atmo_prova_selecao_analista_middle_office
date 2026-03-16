@@ -9,8 +9,7 @@ from app.jobs.extract_job import run_once
 
 def compute_next_run(last_run_utc: datetime, interval_s: int) -> datetime:
     """TODO (Q7): calcular próxima execução sem drift grosseiro."""
-    raise NotImplementedError
-
+    return last_run_utc + timedelta(seconds=interval_s)
 
 def main_loop() -> None:
     s = load_settings()
