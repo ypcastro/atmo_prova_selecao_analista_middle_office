@@ -69,17 +69,52 @@ python -m app.jobs.scheduler
 ### 3.1 Principais reservatorios
 
 ```powershell
-.\scripts\backfill_principais.ps1 -StartDate '2025-01-01' -EndDate '2025-03-31' -SyncCatalog
+.\scripts\backfill_principais.ps1 -StartDate '2025-03-06' -EndDate '2025-03-26' -SyncCatalog
 ```
 
-### 3.2 Sincronizar catalogo de reservatorios
+### 3.2 Todos os reservatorios do catalogo
+
+```powershell
+.\scripts\backfill_reservatorios_catalogo.ps1 -StartDate '2026-03-08' -EndDate '2026-03-26' -SyncCatalog
+```
+
+O script:
+
+1. Carrega todos os `reservatorio_id` da tabela `ana_reservatorios`.
+2. Para cada reservatorio, percorre janelas entre `StartDate` e `EndDate`.
+3. Executa o `extract_job` em modo live com `--since/--until --force`.
+4. Salva resumo CSV em `data/out/backfill/backfill_reservatorios_catalogo_*.csv`.
+
+### 3.3 Uniformizar o periodo inicial dos reservatorios
+
+Quando o salto no agregado por subsistema acontece porque parte dos reservatorios
+so entrou no banco mais tarde, use:
+
+```powershell
+.\scripts\backfill_reservatorios_periodo_faltante.ps1 -TargetStartDate '2018-01-01' -SyncCatalog
+```
+
+O script:
+
+1. Carrega todos os `reservatorio_id` da tabela `ana_reservatorios`.
+2. Inspeciona a menor `data_medicao` ja existente por reservatorio em `ana_medicoes`.
+3. Executa backfill apenas do intervalo faltante entre `TargetStartDate` e a primeira medicao ja existente.
+4. Para reservatorios sem nenhuma medicao no banco, usa `FallbackEndDate` ou a maior data presente no banco.
+5. Salva resumo CSV em `data/out/backfill/backfill_reservatorios_periodo_faltante_*.csv`.
+
+Observacao:
+
+1. Isso reduz retrabalho no backfill, mas nao inventa historico inexistente na ANA.
+2. Se um reservatorio realmente nao tiver dado antes de certa data na fonte, o periodo comum total ainda nao sera atingido.
+
+### 3.4 Sincronizar catalogo de reservatorios
 
 ```powershell
 python -m app.ana.catalog sync --json
 python -m app.ana.catalog list --limit 1000
 ```
 
-### 3.3 Atualizacao diaria de todos os reservatorios do catalogo
+### 3.5 Atualizacao diaria de todos os reservatorios do catalogo
 
 Rodar manual (data de hoje):
 
@@ -90,7 +125,7 @@ Rodar manual (data de hoje):
 Rodar para uma data especifica:
 
 ```powershell
-.\scripts\update_reservatorios_diario.ps1 -TargetDate '2026-03-01' -SyncCatalog
+.\scripts\update_reservatorios_diario.ps1 -TargetDate '2026-03-07' -SyncCatalog
 ```
 
 Rodar para ontem:
@@ -105,7 +140,7 @@ O script:
 2. Roda extracao live para cada um no mesmo dia (`since=until`).
 3. Salva resumo CSV em `data/out/backfill/daily_update_*.csv`.
 
-### 3.4 Agendar no fim do dia (Windows Task Scheduler)
+### 3.6 Agendar no fim do dia (Windows Task Scheduler)
 
 Exemplo para rodar diariamente as 23:50:
 
