@@ -144,6 +144,10 @@ def _mode_or_default(series: pd.Series) -> str:
     return str(mode.iloc[0])
 
 
+def _sum_or_na(series: pd.Series) -> float | None:
+    return series.sum(min_count=1)
+
+
 def series_by_granularity(df: pd.DataFrame, granularity: str) -> pd.DataFrame:
     """Aggregate reservoir series by selected granularity.
 
@@ -175,43 +179,90 @@ def series_by_granularity(df: pd.DataFrame, granularity: str) -> pd.DataFrame:
     return agg.reset_index()
 
 
-def subsystem_daily_mean(df: pd.DataFrame) -> pd.DataFrame:
-    """Build daily subsystem series by averaging all reservoirs each day."""
+def subsystem_daily_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """Build daily subsystem series with median storage and total flows."""
     if df.empty:
         return df
 
-    metrics = ["volume_util_pct", "afluencia_m3s", "defluencia_m3s", "balanco_vazao_m3s"]
     daily = (
-        df.groupby("data_medicao", as_index=False)[metrics]
-        .mean()
+        df.groupby("data_medicao", as_index=False)
+        .agg(
+            volume_util_pct=("volume_util_pct", "median"),
+            afluencia_m3s=("afluencia_m3s", _sum_or_na),
+            defluencia_m3s=("defluencia_m3s", _sum_or_na),
+            balanco_vazao_m3s=("balanco_vazao_m3s", _sum_or_na),
+        )
         .sort_values("data_medicao")
     )
     daily["situacao_hidrologica"] = "agregado"
     return daily
 
 
-def reservoir_period_summary(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute per-reservoir mean metrics for the selected period."""
+def subsystem_series_by_granularity(
+    df: pd.DataFrame, granularity: str
+) -> pd.DataFrame:
+    """Aggregate subsystem view without changing reservoir-view semantics."""
     if df.empty:
         return df
 
-    summary = (
-        df.groupby(["reservatorio", "uf"], dropna=False)[
-            ["volume_util_pct", "afluencia_m3s", "defluencia_m3s", "balanco_vazao_m3s"]
-        ]
-        .mean()
-        .reset_index()
-        .rename(
-            columns={
-                "volume_util_pct": "volume_util_medio_pct",
-                "afluencia_m3s": "afluencia_media_m3s",
-                "defluencia_m3s": "defluencia_media_m3s",
-                "balanco_vazao_m3s": "balanco_medio_m3s",
+    daily = subsystem_daily_summary(df)
+    if granularity == "Diario":
+        return daily
+
+    freq = granularity_freq(granularity)
+    numeric = (
+        daily.set_index("data_medicao")
+        .resample(freq)
+        .agg(
+            {
+                "volume_util_pct": "median",
+                "afluencia_m3s": "mean",
+                "defluencia_m3s": "mean",
+                "balanco_vazao_m3s": "mean",
             }
         )
-        .sort_values("volume_util_medio_pct", ascending=False)
     )
-    return summary
+    status = (
+        daily.set_index("data_medicao")["situacao_hidrologica"]
+        .resample(freq)
+        .agg(_mode_or_default)
+        .rename("situacao_hidrologica")
+    )
+    agg = numeric.join(status).dropna(how="all")
+    return agg.reset_index()
+
+
+def reservoir_latest_snapshot(df: pd.DataFrame) -> pd.DataFrame:
+    """Return the latest available measurement for each reservoir in the period."""
+    if df.empty:
+        return df
+
+    latest = (
+        df.sort_values(["reservatorio_id", "data_medicao"])
+        .groupby("reservatorio_id", as_index=False, sort=False)
+        .tail(1)
+        .loc[
+            :,
+            [
+                "reservatorio",
+                "subsistema",
+                "uf",
+                "data_medicao",
+                "volume_util_pct",
+                "situacao_hidrologica",
+            ],
+        ]
+        .dropna(subset=["volume_util_pct"])
+        .rename(
+            columns={
+                "data_medicao": "ultima_data",
+                "volume_util_pct": "volume_util",
+                "situacao_hidrologica": "situacao",
+            }
+        )
+        .sort_values("volume_util", ascending=True)
+    )
+    return latest.reset_index(drop=True)
 
 
 def _apply_plot_style(fig: go.Figure) -> go.Figure:
@@ -502,15 +553,11 @@ def main() -> None:
         st.caption(f"Granularidade: {granularity}")
         st.plotly_chart(_hydrology_figure(serie), use_container_width=True)
 
-        st.subheader("Comparativo de volume util medio")
-        comp = (
-            filtered.groupby(["reservatorio", "subsistema"], dropna=False)[
-                "volume_util_pct"
-            ]
-            .mean()
-            .reset_index(name="volume_util_medio_pct")
-            .sort_values("volume_util_medio_pct", ascending=False)
+        st.subheader("Comparativo do volume util mais recente")
+        st.caption(
+            "Cada linha considera a ultima medicao disponivel no periodo filtrado para o reservatorio."
         )
+        comp = reservoir_latest_snapshot(filtered)
         st.dataframe(comp, use_container_width=True, hide_index=True)
         return
 
@@ -551,18 +598,22 @@ def main() -> None:
     c4.metric("Data final", str(filtered["data_medicao"].max().date()))
 
     st.subheader(f"Hidrologia por subsistema: {selected_subsystem}")
-    subsystem_daily = subsystem_daily_mean(filtered)
-    serie = series_by_granularity(subsystem_daily, granularity)
+    serie = subsystem_series_by_granularity(filtered, granularity)
     if serie.empty:
         st.info("Sem dados agregados para o subsistema selecionado.")
         return
     st.caption(
-        f"Granularidade: {granularity}. No modo Diario, cada ponto e a media dos reservatorios do subsistema no dia."
+        f"Granularidade: {granularity}. Volume util = mediana dos reservatorios do subsistema em cada dia. "
+        "Afluencia, defluencia e balanco = soma das vazoes dos reservatorios em cada dia. "
+        "Nos modos Semanal e Mensal, o grafico resume esses agregados diarios no periodo."
     )
     st.plotly_chart(_hydrology_figure(serie), use_container_width=True)
 
-    st.subheader("Medias por reservatorio no periodo")
-    summary = reservoir_period_summary(filtered)
+    st.subheader("Ultima medicao por reservatorio no periodo")
+    st.caption(
+        "Cada linha considera a ultima medicao disponivel no periodo filtrado para o reservatorio."
+    )
+    summary = reservoir_latest_snapshot(filtered)
     st.dataframe(summary, use_container_width=True, hide_index=True)
 
 
