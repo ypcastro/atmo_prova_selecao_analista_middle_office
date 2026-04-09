@@ -1,0 +1,244 @@
+# RUNBOOK - ANA_Pipeline
+
+Guia operacional direto ao ponto.
+
+## 1) Setup inicial
+
+### Windows
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -U pip
+python -m pip install -r requirements.txt
+$env:PYTHONPATH='src'
+```
+
+### Linux/macOS
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -r requirements.txt
+export PYTHONPATH=src
+```
+
+## 2) Operacao por objetivo
+
+### Objetivo A: validar rapido se o pipeline funciona
+
+```powershell
+$env:ANA_MODE='snapshot'
+python -c "from app.jobs.extract_job import run_once; print(run_once())"
+```
+
+Esperado:
+
+1. `status=success` ou `status=dry_run`.
+2. `checkpoint.json` atualizado.
+
+### Objetivo B: buscar dados reais da ANA
+
+```powershell
+$env:ANA_MODE='live'
+$env:ANA_RESERVATORIO='19119'
+python -m app.jobs.extract_job --since 2025-12-01 --until 2026-03-01 --force --log-level INFO
+```
+
+### Objetivo C: rodar sem gravar banco (inspecao)
+
+```powershell
+python -m app.jobs.extract_job --dry-run --log-level DEBUG
+```
+
+### Objetivo D: ligar API
+
+```powershell
+python -m uvicorn app.api.main:app --reload --port 8000
+```
+
+### Objetivo E: rodar continuamente
+
+```powershell
+python -m app.jobs.scheduler
+```
+
+## 3) Backfill historico
+
+### 3.1 Principais reservatorios
+
+```powershell
+.\scripts\backfill_principais.ps1 -StartDate '2025-03-06' -EndDate '2025-03-26' -SyncCatalog
+```
+
+### 3.2 Todos os reservatorios do catalogo
+
+```powershell
+.\scripts\backfill_reservatorios_catalogo.ps1 -StartDate '2026-03-08' -EndDate '2026-03-26' -SyncCatalog
+```
+
+O script:
+
+1. Carrega todos os `reservatorio_id` da tabela `ana_reservatorios`.
+2. Para cada reservatorio, percorre janelas entre `StartDate` e `EndDate`.
+3. Executa o `extract_job` em modo live com `--since/--until --force`.
+4. Salva resumo CSV em `data/out/backfill/backfill_reservatorios_catalogo_*.csv`.
+
+### 3.3 Uniformizar o periodo inicial dos reservatorios
+
+Quando o salto no agregado por subsistema acontece porque parte dos reservatorios
+so entrou no banco mais tarde, use:
+
+```powershell
+.\scripts\backfill_reservatorios_periodo_faltante.ps1 -TargetStartDate '2018-01-01' -SyncCatalog
+```
+
+O script:
+
+1. Carrega todos os `reservatorio_id` da tabela `ana_reservatorios`.
+2. Inspeciona a menor `data_medicao` ja existente por reservatorio em `ana_medicoes`.
+3. Executa backfill apenas do intervalo faltante entre `TargetStartDate` e a primeira medicao ja existente.
+4. Para reservatorios sem nenhuma medicao no banco, usa `FallbackEndDate` ou a maior data presente no banco.
+5. Salva resumo CSV em `data/out/backfill/backfill_reservatorios_periodo_faltante_*.csv`.
+
+Observacao:
+
+1. Isso reduz retrabalho no backfill, mas nao inventa historico inexistente na ANA.
+2. Se um reservatorio realmente nao tiver dado antes de certa data na fonte, o periodo comum total ainda nao sera atingido.
+
+### 3.4 Sincronizar catalogo de reservatorios
+
+```powershell
+python -m app.ana.catalog sync --json
+python -m app.ana.catalog list --limit 1000
+```
+
+### 3.5 Atualizacao diaria de todos os reservatorios do catalogo
+
+Rodar manual (data de hoje):
+
+```powershell
+.\scripts\update_reservatorios_diario.ps1 -SyncCatalog
+```
+
+Rodar para uma data especifica:
+
+```powershell
+.\scripts\update_reservatorios_diario.ps1 -TargetDate '2026-03-07' -SyncCatalog
+```
+
+Rodar para ontem:
+
+```powershell
+.\scripts\update_reservatorios_diario.ps1 -UseYesterday -SyncCatalog
+```
+
+O script:
+
+1. Carrega todos os `reservatorio_id` da tabela `ana_reservatorios`.
+2. Roda extracao live para cada um no mesmo dia (`since=until`).
+3. Salva resumo CSV em `data/out/backfill/daily_update_*.csv`.
+
+### 3.6 Agendar no fim do dia (Windows Task Scheduler)
+
+Exemplo para rodar diariamente as 23:50:
+
+```powershell
+schtasks /Create /TN "ANA_Daily_Update" /SC DAILY /ST 23:50 /F /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File %USERPROFILE%\GitHub\ANA_Pipeline\scripts\update_reservatorios_diario.ps1 -UseYesterday -SyncCatalog"
+```
+
+Para verificar:
+
+```powershell
+schtasks /Query /TN "ANA_Daily_Update" /V /FO LIST
+```
+
+## 4) Artefatos gerados
+
+1. Banco: `data/out/ana.db`
+2. Checkpoint: `data/out/checkpoint.json`
+3. Watermark: `data/out/watermark.json`
+4. Raw HTML: `data/out/raw/`
+5. Normalized JSON: `data/out/normalized/`
+6. Backfill CSV: `data/out/backfill/`
+7. Logs diarios: `logs/ana_pipeline_YYYY-MM-DD.log`
+
+Exemplo de log:
+
+```text
+job_name=extract_job | step=finish | run_id=abc123 | status=success | processed=7 | inserted=0 | existing=7 | invalid=0 | duration_ms=1520.6
+```
+
+## 5) Como interpretar retorno do job
+
+Exemplo:
+
+```json
+{"status":"success","processed":7,"inserted":0,"existing":7,"source":"live","run_id":"..."}
+```
+
+Significado:
+
+1. `processed`: registros validos no lote.
+2. `inserted`: novos no banco.
+3. `existing`: ja existiam (idempotencia).
+4. `source`: `snapshot` ou `live`.
+
+## 6) Troubleshooting por sintoma
+
+### Sintoma: `processed=0`
+
+Causas comuns:
+
+1. Periodo sem publicacao.
+2. Reservatorio sem dado no intervalo.
+3. Resposta sem tabela esperada.
+
+Acoes:
+
+1. Diminuir janela (`--since/--until`).
+2. Verificar HTML em `data/out/raw/`.
+3. Rodar `--dry-run --log-level DEBUG`.
+
+### Sintoma: timeout da ANA (`ReadTimeout`)
+
+Acoes:
+
+1. Tentar novamente.
+2. Diminuir janela.
+3. Usar carga em blocos mensais.
+
+### Sintoma: `PYTHONPATH=src` nao funciona no PowerShell
+
+Use:
+
+```powershell
+$env:PYTHONPATH='src'
+python -m pytest -q
+```
+
+### Sintoma: `streamlit` nao reconhecido
+
+Use:
+
+```powershell
+python -m pip install -r requirements-streamlit.txt
+python -m streamlit run src/app/dashboard/streamlit_app.py
+```
+
+### Sintoma: UF/subsistema vazio
+
+Acoes:
+
+1. `python -m app.ana.catalog sync`
+2. Rodar extracao novamente para refresh.
+
+## 7) Checklist antes de entrega
+
+1. `python -m pytest -q` verde.
+2. `python -m pytest -q tests/test_documentation.py` verde.
+3. `POST /extract/ana` funcional.
+4. `GET /ana/medicoes/{record_id}` retorna `404` para inexistente.
+5. `GET /ana/checkpoint` e `GET /ana/analysis` funcionando.
+6. `README`, `RUNBOOK`, `DECISIONS` coerentes com o codigo.

@@ -1,161 +1,224 @@
-# Prova Técnica — Pipeline End-to-End (ANA → ETL → Agendamento → API → Análise) [VERSÃO ABERTA]
+﻿# ANA_Pipeline
 
-Este repositório é uma prova em formato **Git**:
-1) faça fork
-2) implemente as tarefas
-3) abra um PR
+Pipeline para coletar, tratar e armazenar medicoes de reservatorios da ANA, com API e dashboard.
 
-A prova foi desenhada para avaliar **capacidade de construir e manter** um pipeline real,
-incluindo leitura de código legado, organização, testes, idempotência e exposição em API.
+## O que voce consegue fazer com este projeto
 
-Fonte pública (modo live opcional):
-- https://www.ana.gov.br/sar0/MedicaoSin
+1. Carregar dados de reservatorios para SQLite.
+2. Rodar extracao repetivel com arquivo local (`snapshot`) ou dados reais da ANA (`live`).
+3. Consultar dados via API FastAPI.
+4. Visualizar no Streamlit.
+5. Ter rastreabilidade com checkpoint, watermark e logs diarios.
 
-**Importante:** os testes oficiais usam um **snapshot local** (arquivo `data/ana_snapshot.html`) para reprodutibilidade.
-O modo `live` é bônus e pode falhar por instabilidade externa.
+## Comece aqui (5 minutos)
 
----
+### Windows (PowerShell)
 
-## Objetivo do pipeline
-
-Implementar um pipeline que:
-1) Extrai medições da ANA (HTML) — snapshot e/ou live
-2) Faz parsing e normalização (tipos, datas, números pt-BR, validações)
-3) Persiste em SQLite com **idempotência**
-4) Roda automaticamente em frequência definida (estilo “cron”)
-5) Expõe dados via FastAPI (consulta + endpoint para disparar extração)
-6) Faz uma análise simples (métricas + interpretação)
-
----
-
-## Como rodar
-
-### Local
-```bash
+```powershell
 python -m venv .venv
-source .venv/bin/activate
-pip install -U pip
-pip install -r requirements.txt
-pytest -q
-
-uvicorn app.api.main:app --reload --port 8000
+.\.venv\Scripts\Activate.ps1
+python -m pip install -U pip
+python -m pip install -r requirements.txt
+$env:PYTHONPATH='src'
+python -m pytest -q
+python -c "from app.jobs.extract_job import run_once; print(run_once())"
 ```
 
-### Docker
-```bash
-docker compose up --build
-# API: http://localhost:8000/docs
+Se o ultimo comando retornar `status=success` ou `status=dry_run`, o pipeline esta funcionando.
 
-docker compose run --rm tests
+## Conceitos importantes (simples)
+
+1. `snapshot`: usa [ana_snapshot.html](data/ana_snapshot.html), sempre igual, ideal para teste.
+2. `live`: busca na ANA pela internet, ideal para historico real.
+3. `dry-run`: executa tudo, mas nao grava no banco.
+4. `watermark`: lembra a ultima data processada no modo `live`.
+5. `idempotencia`: rodar de novo nao duplica registro.
+
+## Requisitos da prova x status
+
+| Requisito | Status | Arquivo |
+|---|---|---|
+| Q1 Parsing robusto | OK | `src/app/core/parsing.py` |
+| Q2 Artefatos/checkpoint | OK | `src/app/core/pipeline_io.py` |
+| Q3 Parser HTML | OK | `src/app/ana/parser.py` |
+| Q4 Normalize/validate/dedupe | OK | `src/app/core/transforms.py` |
+| Q6 SQLite idempotente | OK | `src/app/core/storage.py` |
+| Q7 Job/Scheduler/API/Analysis | OK | `src/app/jobs`, `src/app/api`, `src/app/analysis` |
+
+## Fluxo do pipeline (visao didatica)
+
+```mermaid
+flowchart TD
+    A[Escolher modo: snapshot ou live] --> B[Coletar HTML]
+    B --> C[Parsear tabela da ANA]
+    C --> D[Normalizar e validar campos]
+    D --> E[Enriquecer com metadata]
+    E --> F[Remover duplicados]
+    F --> G{dry-run?}
+    G -->|sim| H[Salvar artefatos e checkpoint]
+    G -->|nao| I[Upsert no SQLite]
+    I --> J[Atualizar checkpoint e watermark]
 ```
 
----
+## Comandos principais (copiar e colar)
 
-## Variáveis de ambiente
+### 1) Rodar extracao simples
 
-- `APP_DATA_DIR` (default: `data`)
-- `ANA_MODE` (`snapshot|live`, default: `snapshot`)
-- `PIPELINE_INTERVAL_SECONDS` (default: `60`)
-- `ANA_RESERVATORIO` (default: `19091`)
-- `ANA_DATA_INICIAL` (default: `2025-10-01`)
-- `ANA_DATA_FINAL` (default: `2025-10-07`)
+```powershell
+$env:PYTHONPATH='src'
+python -c "from app.jobs.extract_job import run_once; print(run_once())"
+```
 
----
+### 2) Rodar com CLI oficial
 
-## Regras (scraping responsável)
-- Não contornar login/CAPTCHA/WAF.
-- Use timeout, User-Agent, retry/backoff para 429/5xx e rate limit.
-- `live` é opcional (bônus). O essencial é passar no snapshot.
+```powershell
+$env:PYTHONPATH='src'
+python -m app.jobs.extract_job --dry-run --log-level INFO
+python -m app.jobs.extract_job --since 2025-01-01 --until 2025-01-31 --force
+```
 
----
+Flags:
 
-# Entregas
+1. `--dry-run`: nao grava no banco.
+2. `--log-level`: `DEBUG|INFO|WARNING|ERROR`.
+3. `--since` e `--until`: define janela.
+4. `--force`: ignora watermark no `live`.
 
-- Código implementado (TODOs)
-- Testes passando (`pytest -q`)
-- `DECISIONS.md` explicando decisões (trade-offs, schema, idempotência, scheduler)
-- (Bônus) observabilidade: logs úteis, checkpoint, artefatos (raw/normalized)
+### 3) Subir API
 
----
+```powershell
+$env:PYTHONPATH='src'
+python -m uvicorn app.api.main:app --reload --port 8000
+```
 
-# Tarefas (7 questões)
+Endpoints obrigatorios:
 
-## Q1 — Parsing robusto (datas e números pt-BR)
-Arquivo: `src/app/core/parsing.py` + `tests/test_parsing.py`
+1. `POST /extract/ana`
+2. `GET /ana/medicoes`
+3. `GET /ana/medicoes/{record_id}`
+4. `GET /ana/checkpoint`
+5. `GET /ana/analysis`
 
-Implemente:
-- `parse_date_mixed()` suportando:
-  - `DD/MM/YYYY`, `DD/MM/YYYY HH:MM:SS`
-  - ISO `YYYY-MM-DD`, `YYYY-MM-DDTHH:MM:SS` (com ou sem timezone/Z)
-- `safe_float_ptbr()`:
-  - aceitar `1.234,56`, `1234,56`, `1234.56`
-  - retornar `None` para tokens ausentes (`""`, `"—"`, `"NaN"`, `"inf"` etc.)
+### 4) Rodar scheduler
 
+```powershell
+$env:PYTHONPATH='src'
+python -m app.jobs.scheduler
+```
 
-## Q2 — Estruturar I/O do pipeline (artefatos operacionais)
-Arquivo: `src/app/core/pipeline_io.py` + `tests/test_pipeline_io.py`
+### 5) Rodar dashboard
 
-Implementar uma classe (ou funções) para:
-- salvar **raw HTML** da extração
-- salvar JSON normalizado da rodada
-- salvar **checkpoint** de execução (success/fail, inserted/existing, erro, timestamp)
-- garantir escrita segura (evitar arquivo corrompido)
+```powershell
+python -m pip install -r requirements-streamlit.txt
+$env:PYTHONPATH='src'
+python -m streamlit run src/app/dashboard/streamlit_app.py
+```
 
+### Como usar o dashboard
 
-## Q3 — Parser ANA (HTML → registros)
-Arquivo: `src/app/ana/parser.py` + `tests/test_ana_parser.py`
+1. Abra o dashboard e ajuste os filtros na barra lateral:
+   - `Periodo`
+   - `Subsistema`
+   - `UF`
+   - `Reservatorio`
+   - `Granularidade` (`Diario`, `Semanal`, `Mensal`)
+2. Selecione o reservatorio foco.
+3. O painel mostra automaticamente:
+   - grafico de hidrologia (volume util, afluencia/defluencia e balanco)
+   - comparativo de volume util medio
+4. Se quiser, baixe os dados filtrados em CSV pelo botao `Baixar CSV filtrado`.
 
-Implementar `parse_ana_records(html)`:
-- tolerar pequenas variações de header
-- extrair colunas relevantes e construir `record_id = "{reservatorio_id}-{data_iso}"`
-- deduplicar por `record_id`
+### Dashboard (visao)
 
+![Dashboard ANA](docs/img/dashboard.png)
 
-## Q4 — Normalização e validação (schema)
-Arquivo: `src/app/core/transforms.py` + `tests/test_transforms.py`
+### 6) Atualizacao diaria de todos os reservatorios cadastrados
 
-Implementar:
-- `normalize_record()` (tipos e nomes canônicos)
-- `validate_record()` (regras mínimas; raise ValueError)
-- `deduplicar()` O(n)
+```powershell
+.\scripts\update_reservatorios_diario.ps1 -UseYesterday -SyncCatalog
+```
 
+Para agendar no fim do dia, veja o passo a passo em [RUNBOOK.md](RUNBOOK.md).
 
-## Q5 — Client ANA (modo live) [BÔNUS]
-Arquivo: `src/app/ana/client.py` + `tests/test_ana_client.py`
+## Exemplo pratico: popular Tres Marias no mesmo range dos outros
 
-Implementar:
-- `build_ana_url()` com params corretos
-- `fetch_ana_html()` com retry/backoff (429/5xx), rate limit e timeouts
+```powershell
+$env:PYTHONPATH='src'
+$env:APP_DATA_DIR='data'
+$env:ANA_MODE='live'
+$env:ANA_RESERVATORIO='19119'   # Tres Marias
 
-Observação: os testes não exigem live real; há testes unitários de URL e comportamento de retry (mock).
+$start = [datetime]'2025-01-01'
+$end   = [datetime]'2026-03-01'
+$cursor = $start
 
+while ($cursor -le $end) {
+  $windowEnd = $cursor.AddMonths(1).AddDays(-1)
+  if ($windowEnd -gt $end) { $windowEnd = $end }
 
-## Q6 — Persistência idempotente (SQLite)
-Arquivo: `src/app/core/storage.py` + `tests/test_storage.py`
+  python -m app.jobs.extract_job `
+    --since $cursor.ToString('yyyy-MM-dd') `
+    --until $windowEnd.ToString('yyyy-MM-dd') `
+    --force `
+    --log-level INFO
 
-Implementar:
-- `init_db()` cria schema
-- `upsert_many()` idempotente e retorna contagem `{inserted, existing}`
-- `fetch_records()` e `fetch_by_id()`
+  Start-Sleep -Seconds 2
+  $cursor = $windowEnd.AddDays(1)
+}
+```
 
+## Onde olhar os resultados
 
-## Q7 — Orquestração (job), Scheduler e API + Análise
-- Job: `src/app/jobs/extract_job.py`
-- Scheduler: `src/app/jobs/scheduler.py`
-- API: `src/app/api/main.py`
-- Análise: `src/app/analysis/ana_analysis.py`
+1. Banco: `data/out/ana.db`
+2. Checkpoint: `data/out/checkpoint.json`
+3. Watermark: `data/out/watermark.json`
+4. HTML bruto: `data/out/raw/`
+5. JSON normalizado: `data/out/normalized/`
+6. Logs diarios: `logs/ana_pipeline_YYYY-MM-DD.log`
 
-Implementar:
-- `run_once()` executa extract→parse→normalize→validate→upsert e escreve artefatos/checkpoint
-- scheduler que roda a cada `PIPELINE_INTERVAL_SECONDS` sem “drift” grosseiro
-- API:
-  - `POST /extract/ana` (dispara 1 rodada)
-  - `GET /ana/medicoes`
-  - `GET /ana/medicoes/{record_id}`
-  - `GET /ana/checkpoint`
-  - `GET /ana/analysis`
+## Modelo de dados (resumo)
 
----
+### `ana_medicoes`
 
+1. PK: `record_id` (`{reservatorio_id}-{data_medicao}`).
+2. Campos principais: `reservatorio_id`, `reservatorio`, `data_medicao`.
+3. Metricas: `cota_m`, `afluencia_m3s`, `defluencia_m3s`, `volume_util_pct` e outras.
+4. Enriquecimento: `uf`, `subsistema`, `balanco_vazao_m3s`, `situacao_hidrologica`.
 
-Boa Prova e Boa Sorte!
+### `ana_reservatorios`
+
+Catalogo de usinas/reservatorios com `reservatorio_id`, nome, UF e subsistema.
+
+## Code Map
+
+1. `src/app/api`: endpoints FastAPI e contratos HTTP.
+2. `src/app/jobs`: orquestracao do job unitario e scheduler.
+3. `src/app/core`: config, transformacoes, storage, IO de artefatos e logging.
+4. `src/app/ana`: cliente/fetch/parser/catalogo de dados ANA.
+5. `src/app/dashboard`: interface Streamlit para analise hidrologica.
+6. `src/app/analysis`: agregacoes e indicadores derivados para API.
+
+## Qualidade
+
+Rodar testes:
+
+```powershell
+$env:PYTHONPATH='src'
+python -m pytest -q
+```
+
+Validar padrao de documentacao:
+
+```powershell
+$env:PYTHONPATH='src'
+python -m pytest -q tests/test_documentation.py
+```
+
+Status atual esperado: suite verde.
+
+## Documentos de apoio
+
+1. Operacao e troubleshooting: [RUNBOOK.md](RUNBOOK.md)
+2. Decisoes de engenharia: [DECISIONS.md](DECISIONS.md)
+3. Padrao de documentacao tecnica: [docs/DOCUMENTATION_STYLE.md](docs/DOCUMENTATION_STYLE.md)
+
